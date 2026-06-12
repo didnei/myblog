@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Private Vibe Blog</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 Vibe Blog</h1>
+            <p>내 브라우저에만 저장되는 비밀 한 스푼 블로그</p>
+        </header>
+
+        <section class="write-section">
+            <input type="text" id="post-title" placeholder="오늘의 제목은?">
+            <textarea id="post-content" rows="5" placeholder="지금 무슨 생각을 하고 있나요? 당신의 바이브를 기록해보세요..."></textarea>
+            <button id="save-btn">글 남기기</button>
+        </section>
+
+        <section class="list-section">
+            <h2>기록된 이야기들</h2>
+            <div id="posts-container">
+                </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
