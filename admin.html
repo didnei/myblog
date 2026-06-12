@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aesthetic Space — 글 관리자</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Supabase & Marked.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container nav-wrapper">
+      <a href="index.html" class="logo">Aesthetic.</a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="admin.html" class="active">Admin</a></li>
+          <li><button id="open-config" class="nav-links" style="font-weight:500; color:var(--text-secondary); cursor:pointer;">Settings</button></li>
+          <li>
+            <button id="theme-btn" class="theme-toggle" aria-label="테마 전환">
+              <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ADMIN AUTHENTICATION -->
+    <div id="admin-auth" style="max-width: 400px; margin: 100px auto; text-align: center;" class="glass-panel">
+      <div style="padding: 40px;">
+        <h2 style="font-family: 'Playfair Display', serif; margin-bottom: 16px;">관리자 인증</h2>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px;">블로그 글을 작성하고 관리하려면 관리자 비밀번호를 입력해주세요.</p>
+        <div class="form-group" style="margin-bottom: 20px;">
+          <input type="password" id="admin-password-input" placeholder="관리자 비밀번호를 입력하세요">
+        </div>
+        <button id="admin-login-btn" class="submit-btn" style="width: 100%; justify-content: center;">인증하기</button>
+      </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="admin-panel" style="display: none; margin-top: 40px;">
+      <div class="admin-header">
+        <h1 class="admin-title">글 관리 및 작성</h1>
+        <button id="admin-logout-btn" class="btn-secondary" style="padding: 8px 16px;">로그아웃</button>
+      </div>
+
+      <!-- Content Editor Grid -->
+      <div class="admin-grid">
+        <!-- Editor Form -->
+        <div class="glass-panel" style="padding: 32px;">
+          <h2 style="font-family: 'Playfair Display', serif; margin-bottom: 24px;" id="editor-title-label">새 글 작성</h2>
+          <form class="editor-form" id="post-editor-form">
+            <input type="hidden" id="edit-post-id" value="">
+            
+            <div class="form-group">
+              <label for="post-title-input">제목</label>
+              <input type="text" id="post-title-input" placeholder="글 제목을 입력하세요" required>
+            </div>
+            
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="post-category-select">카테고리</label>
+                <select id="post-category-select" required>
+                  <option value="Tech">Tech</option>
+                  <option value="Design">Design</option>
+                  <option value="Life">Life</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="post-cover-input">커버 이미지 URL (선택)</label>
+                <input type="url" id="post-cover-input" placeholder="https://images.unsplash.com/...">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="post-summary-input">요약문</label>
+              <input type="text" id="post-summary-input" placeholder="글 목록에 노출될 짧은 요약문을 입력하세요" required>
+            </div>
+
+            <div class="form-group">
+              <label for="post-content-textarea">본문 (마크다운 지원)</label>
+              <textarea id="post-content-textarea" class="editor-textarea" placeholder="## 본문 제목&#13;&#10;여기에 마크다운 형식으로 포스트 본문을 작성하세요..." required></textarea>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 12px;">
+              <button type="button" id="reset-editor-btn" class="btn-secondary" style="flex: 1;">작성 취소</button>
+              <button type="submit" class="submit-btn" style="flex: 2; justify-content: center;">
+                <span id="save-btn-text">저장 및 발행</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="glass-panel preview-panel">
+          <h2 style="font-family: 'Playfair Display', serif; margin-bottom: 24px; color: var(--text-muted);">실시간 미리보기</h2>
+          <h1 id="preview-title" style="font-family: 'Playfair Display', serif; font-size: 2.2rem; margin-bottom: 16px;"></h1>
+          <div id="preview-meta" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px; display: none;">
+            <span id="preview-category" style="color: var(--primary); font-weight: 600; margin-right: 12px;"></span>
+            <span id="preview-date"></span>
+          </div>
+          <div class="post-body" id="preview-content">
+            <p style="color: var(--text-muted); font-style: italic;">본문 작성 시 실시간 마크다운 미리보기가 이곳에 렌더링됩니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Posts Management List -->
+      <section class="glass-panel" style="padding: 32px; margin-bottom: 80px;">
+        <h2 style="font-family: 'Playfair Display', serif; margin-bottom: 24px;">발행된 글 관리</h2>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">
+                <th style="padding: 12px 16px;">카테고리</th>
+                <th style="padding: 12px 16px;">제목</th>
+                <th style="padding: 12px 16px;">작성일</th>
+                <th style="padding: 12px 16px;">조회수</th>
+                <th style="padding: 12px 16px; text-align: right;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="admin-posts-list">
+              <!-- Dynamically populated rows -->
+              <tr>
+                <td colspan="5" style="padding: 24px; text-align: center; color: var(--text-muted);">등록된 글이 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- CONFIG MODAL (Shared with index.html) -->
+  <div class="modal-overlay" id="config-modal">
+    <div class="modal-content glass-panel">
+      <h2 class="modal-title">Supabase 연동 설정</h2>
+      <p class="modal-desc">블로그 데이터를 연동하기 위해 Supabase URL과 Anon Key를 입력해주세요. 설정은 브라우저(localStorage)에 안전하게 저장됩니다.</p>
+      
+      <div class="editor-form">
+        <div class="form-group">
+          <label for="supabase-url">Supabase Project URL</label>
+          <input type="text" id="supabase-url" placeholder="https://your-project.supabase.co">
+        </div>
+        <div class="form-group">
+          <label for="supabase-key">Supabase Anon Key</label>
+          <input type="password" id="supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-secondary" id="close-config">닫기</button>
+          <button class="submit-btn" id="save-config" style="padding: 10px 20px;">
+            <span>저장하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Aesthetic Space. Powered by Vercel & Supabase.</p>
+    </div>
+  </footer>
+
+  <!-- Business Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,31 +1,122 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Private Vibe Blog</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aesthetic Space — 나만의 특별한 블로그</title>
+  <meta name="description" content="Supabase와 Vercel을 이용한 세련되고 아름다운 개인 블로그">
+  <link rel="stylesheet" href="style.css">
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>📝 Vibe Blog</h1>
-            <p>내 브라우저에만 저장되는 비밀 한 스푼 블로그</p>
-        </header>
 
-        <section class="write-section">
-            <input type="text" id="post-title" placeholder="오늘의 제목은?">
-            <textarea id="post-content" rows="5" placeholder="지금 무슨 생각을 하고 있나요? 당신의 바이브를 기록해보세요..."></textarea>
-            <button id="save-btn">글 남기기</button>
-        </section>
-
-        <section class="list-section">
-            <h2>기록된 이야기들</h2>
-            <div id="posts-container">
-                </div>
-        </section>
+  <!-- HEADER -->
+  <header>
+    <div class="container nav-wrapper">
+      <a href="index.html" class="logo">Aesthetic.</a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html" class="active">Home</a></li>
+          <li><a href="admin.html">Admin</a></li>
+          <li><button id="open-config" class="nav-links" style="font-weight:500; color:var(--text-secondary); cursor:pointer;">Settings</button></li>
+          <li>
+            <button id="theme-btn" class="theme-toggle" aria-label="테마 전환">
+              <!-- Sun Icon (Default in Dark Mode) -->
+              <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </button>
+          </li>
+        </ul>
+      </nav>
     </div>
+  </header>
 
-    <script src="app.js"></script>
+  <!-- HERO SECTION -->
+  <section class="hero container">
+    <span class="hero-subtitle">Welcome to my universe</span>
+    <h1 class="hero-title">생각과 영감을 기록하는<br><span>아름다운 아카이브</span></h1>
+    <p class="hero-desc">디자인, 기술, 그리고 일상의 소소한 기록을 고유한 감성으로 담아내는 공간입니다.</p>
+  </section>
+
+  <!-- FILTER & SEARCH BAR -->
+  <section class="container filter-bar">
+    <div class="categories" id="category-list">
+      <button class="category-btn active" data-category="all">All</button>
+      <button class="category-btn" data-category="Tech">Tech</button>
+      <button class="category-btn" data-category="Design">Design</button>
+      <button class="category-btn" data-category="Life">Life</button>
+    </div>
+    
+    <div class="search-box">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" id="search-input" placeholder="글 제목 또는 내용 검색...">
+    </div>
+  </section>
+
+  <!-- POSTS SECTION -->
+  <main class="container">
+    <div class="posts-grid" id="posts-container">
+      <!-- Loading Skeleton (dynamic content will replace this) -->
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);" id="loading-spinner">
+        <p style="margin-bottom: 12px;">데이터를 불러오는 중입니다...</p>
+        <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid var(--border-color); border-radius: 50%; border-top-color: var(--primary); animation: spin 1s linear infinite;"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- CONFIG MODAL (Supabase Credentials Setup) -->
+  <div class="modal-overlay" id="config-modal">
+    <div class="modal-content glass-panel">
+      <h2 class="modal-title">Supabase 연동 설정</h2>
+      <p class="modal-desc">블로그 데이터를 연동하기 위해 Supabase URL과 Anon Key를 입력해주세요. 설정은 브라우저(localStorage)에 안전하게 저장됩니다.</p>
+      
+      <div class="editor-form">
+        <div class="form-group">
+          <label for="supabase-url">Supabase Project URL</label>
+          <input type="text" id="supabase-url" placeholder="https://your-project.supabase.co">
+        </div>
+        <div class="form-group">
+          <label for="supabase-key">Supabase Anon Key</label>
+          <input type="password" id="supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-secondary" id="close-config">닫기</button>
+          <button class="submit-btn" id="save-config" style="padding: 10px 20px;">
+            <span>저장하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Aesthetic Space. Powered by Vercel & Supabase.</p>
+    </div>
+  </footer>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <!-- Business Logic -->
+  <script src="app.js"></script>
 </body>
 </html>
