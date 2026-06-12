@@ -1,18 +1,101 @@
 // --- GLOBALS & CONFIGURATION ---
-let supabase = null;
+let blogSupabase = null; // Renamed to avoid collision with CDN global window.supabase
 const CONFIG_KEY = 'aesthetic_blog_supabase_config';
 const AUTH_KEY = 'aesthetic_blog_admin_authenticated';
 const THEME_KEY = 'aesthetic_blog_theme';
 
-// --- INITIALIZE SUPABASE ---
-function initSupabase() {
-  const config = JSON.parse(localStorage.getItem(CONFIG_KEY));
+// Safe LocalStorage Wrappers to avoid SecurityError in restricted file:// contexts
+function safeGetItem(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn("SafeStorage: localStorage read access denied.", e);
+    return null;
+  }
+}
+
+// Safe SessionStorage Wrappers
+function safeGetSession(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch (e) {
+    console.warn("SafeStorage: sessionStorage read access denied.", e);
+    return null;
+  }
+}
+
+function safeSetSession(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.warn("SafeStorage: sessionStorage write access denied.", e);
+    return false;
+  }
+}
+
+function safeRemoveSession(key) {
+  try {
+    sessionStorage.removeItem(key);
+    return true;
+  } catch (e) {
+    console.warn("SafeStorage: sessionStorage remove access denied.", e);
+    return false;
+  }
+}
+
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.warn("SafeStorage: localStorage write access denied.", e);
+    return false;
+  }
+}
+
+function safeParseJSON(str) {
+  try {
+    return str ? JSON.parse(str) : null;
+  } catch (e) {
+    console.error("SafeStorage: JSON parse error for string:", str, e);
+    return null;
+  }
+}
+
+// --- INITIALIZE SUPABASE (HYBRID) ---
+async function initSupabase() {
+  // 1. Try fetching from Vercel Serverless API first (only on http/https protocols)
+  const isHttp = window.location.protocol.startsWith('http');
+  
+  if (isHttp) {
+    try {
+      const response = await fetch('/api/supabase-config');
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.url && data.key) {
+          blogSupabase = window.supabase.createClient(data.url, data.key);
+          console.log("Supabase initialized via Vercel Env variables.");
+          return true;
+        }
+      }
+    } catch (apiError) {
+      // Fail silently, fallback to localStorage
+      console.warn("Vercel Env API fetch failed or not found. Falling back to LocalStorage.", apiError);
+    }
+  } else {
+    console.log("Local file:// protocol detected. Skipping Vercel Env API fetch.");
+  }
+
+  // 2. Fallback to LocalStorage config
+  const config = safeParseJSON(safeGetItem(CONFIG_KEY));
   if (config && config.url && config.key) {
     try {
-      supabase = window.supabase.createClient(config.url, config.key);
+      blogSupabase = window.supabase.createClient(config.url, config.key);
+      console.log("Supabase initialized via LocalStorage config.");
       return true;
     } catch (error) {
-      console.error("Supabase 초기화 오류:", error);
+      console.error("Supabase 초기화 오류 (LocalStorage):", error);
       return false;
     }
   }
@@ -21,7 +104,7 @@ function initSupabase() {
 
 // --- THEME CONTROL (LIGHT/DARK) ---
 function initTheme() {
-  const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  const savedTheme = safeGetItem(THEME_KEY) || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
   updateThemeIcon(savedTheme);
 
@@ -31,7 +114,7 @@ function initTheme() {
       const currentTheme = document.documentElement.getAttribute('data-theme');
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', newTheme);
-      localStorage.setItem(THEME_KEY, newTheme);
+      safeSetItem(THEME_KEY, newTheme);
       updateThemeIcon(newTheme);
     });
   }
@@ -74,8 +157,14 @@ function initConfigModal() {
 
   if (!modal) return;
 
+  // Show status in modal desc if configured via env
+  const modalDesc = modal.querySelector('.modal-desc');
+  if (modalDesc && blogSupabase && !safeGetItem(CONFIG_KEY)) {
+    modalDesc.innerHTML = '현재 Vercel 환경변수를 통해 Supabase가 이미 성공적으로 연결되어 있습니다. 수동으로 다른 DB 설정을 사용하시고 싶을 때만 아래 값을 입력하세요.';
+  }
+
   const showModal = () => {
-    const config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || { url: '', key: '' };
+    const config = safeParseJSON(safeGetItem(CONFIG_KEY)) || { url: '', key: '' };
     urlInput.value = config.url;
     keyInput.value = config.key;
     modal.classList.add('active');
@@ -98,7 +187,7 @@ function initConfigModal() {
         return;
       }
 
-      localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, key }));
+      safeSetItem(CONFIG_KEY, JSON.stringify({ url, key }));
       hideModal();
       alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
       window.location.reload();
@@ -106,7 +195,7 @@ function initConfigModal() {
   }
 
   // 만약 Supabase 설정이 없다면 자동으로 모달 노출
-  if (!supabase) {
+  if (!blogSupabase) {
     setTimeout(showModal, 600);
   }
 }
@@ -143,7 +232,21 @@ async function handleIndexPage() {
   const categoryList = document.getElementById('category-list');
   
   if (!container) return; // Not index page
-  if (!supabase) return; // Supabase not configured
+  if (!blogSupabase) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 60px;" class="glass-panel">
+        <svg style="margin-bottom: 16px; color: var(--text-muted); display: inline-block;" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <h3 style="font-family: 'Playfair Display', serif; margin-bottom: 8px;">Supabase 설정이 필요합니다</h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">우측 상단 <strong>Settings</strong> 버튼을 눌러 프로젝트 URL과 Anon Key를 입력해주세요.</p>
+        <button onclick="document.getElementById('config-modal').classList.add('active')" class="submit-btn" style="display: inline-flex; margin: 0 auto;">설정창 열기</button>
+      </div>
+    `;
+    return;
+  }
 
   let allPosts = [];
   let currentCategory = 'all';
@@ -157,7 +260,7 @@ async function handleIndexPage() {
     `;
 
     try {
-      let query = supabase.from('posts').select('*').order('created_at', { ascending: false });
+      let query = blogSupabase.from('posts').select('*').order('created_at', { ascending: false });
       
       const { data, error } = await query;
       if (error) throw error;
@@ -262,8 +365,12 @@ async function handleDetailPage() {
   const errorPanel = document.getElementById('post-error');
 
   if (!article) return; // Not detail page
-  if (!supabase) {
+  if (!blogSupabase) {
     loading.style.display = 'none';
+    const errorDesc = errorPanel.querySelector('p');
+    if (errorDesc) {
+      errorDesc.innerHTML = 'Supabase 설정이 완료되지 않았습니다. 우측 상단 <strong>Settings</strong> 버튼을 클릭하여 API 키를 설정해주세요.';
+    }
     errorPanel.style.display = 'block';
     return;
   }
@@ -279,7 +386,7 @@ async function handleDetailPage() {
 
   try {
     // 1. Fetch Post Detail
-    const { data: post, error } = await supabase.from('posts').select('*').eq('id', postId).single();
+    const { data: post, error } = await blogSupabase.from('posts').select('*').eq('id', postId).single();
     if (error || !post) throw error;
 
     // 2. Render content
@@ -298,10 +405,10 @@ async function handleDetailPage() {
     commentsSection.style.display = 'block';
 
     // 3. Increment views asynchronously
-    supabase.rpc('increment_views', { post_id: postId }).then(({ error: rpcError }) => {
+    blogSupabase.rpc('increment_views', { post_id: postId }).then(({ error: rpcError }) => {
       if (rpcError) {
         // Fallback if custom RPC function is not defined
-        supabase.from('posts').update({ views: (post.views || 0) + 1 }).eq('id', postId);
+        blogSupabase.from('posts').update({ views: (post.views || 0) + 1 }).eq('id', postId);
       }
     });
 
@@ -320,7 +427,7 @@ async function handleDetailPage() {
       if (!author || !content || !password) return;
 
       try {
-        const { error: insertErr } = await supabase.from('comments').insert([
+        const { error: insertErr } = await blogSupabase.from('comments').insert([
           { post_id: postId, author, content, password }
         ]);
 
@@ -346,7 +453,7 @@ async function loadComments(postId) {
   if (!listContainer) return;
 
   try {
-    const { data: comments, error } = await supabase
+    const { data: comments, error } = await blogSupabase
       .from('comments')
       .select('*')
       .eq('post_id', postId)
@@ -385,7 +492,7 @@ window.deleteComment = async function(commentId, postId) {
 
   try {
     // Check password by requesting delete with matching ID and password
-    const { data, error } = await supabase
+    const { data, error } = await blogSupabase
       .from('comments')
       .delete()
       .eq('id', commentId)
@@ -420,8 +527,8 @@ function handleAdminPage() {
   const logoutBtn = document.getElementById('admin-logout-btn');
 
   // Check Local Session
-  const isAuth = sessionStorage.getItem(AUTH_KEY);
-  if (isAuth === 'true' && supabase) {
+  const isAuth = safeGetSession(AUTH_KEY);
+  if (isAuth === 'true' && blogSupabase) {
     authSection.style.display = 'none';
     panelSection.style.display = 'block';
     loadAdminDashboard();
@@ -430,15 +537,15 @@ function handleAdminPage() {
   // Login event
   loginBtn.addEventListener('click', () => {
     const pw = passwordInput.value.trim();
-    if (!supabase) {
+    if (!blogSupabase) {
       alert("Settings에서 Supabase 설정을 먼저 완료해주세요.");
       return;
     }
     
     // Simple verification (default: 'admin' or custom localStorage code)
-    const storedAdminPw = localStorage.getItem('aesthetic_admin_pin') || DEFAULT_ADMIN_PASSWORD;
+    const storedAdminPw = safeGetItem('aesthetic_admin_pin') || DEFAULT_ADMIN_PASSWORD;
     if (pw === storedAdminPw) {
-      sessionStorage.setItem(AUTH_KEY, 'true');
+      safeSetSession(AUTH_KEY, 'true');
       authSection.style.display = 'none';
       panelSection.style.display = 'block';
       loadAdminDashboard();
@@ -449,7 +556,7 @@ function handleAdminPage() {
 
   // Logout event
   logoutBtn.addEventListener('click', () => {
-    sessionStorage.removeItem(AUTH_KEY);
+    safeRemoveSession(AUTH_KEY);
     authSection.style.display = 'block';
     panelSection.style.display = 'none';
   });
@@ -461,12 +568,12 @@ function handleAdminPage() {
 
 async function loadAdminDashboard() {
   const postsList = document.getElementById('admin-posts-list');
-  if (!postsList || !supabase) return;
+  if (!postsList || !blogSupabase) return;
 
   postsList.innerHTML = `<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--text-muted);">글 목록을 불러오는 중...</td></tr>`;
 
   try {
-    const { data: posts, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+    const { data: posts, error } = await blogSupabase.from('posts').select('*').order('created_at', { ascending: false });
     if (error) throw error;
 
     if (!posts || posts.length === 0) {
@@ -495,10 +602,10 @@ async function loadAdminDashboard() {
 
 // Global scope expose for admin buttons
 window.editPost = async function(id) {
-  if (!supabase) return;
+  if (!blogSupabase) return;
   
   try {
-    const { data: post, error } = await supabase.from('posts').select('*').eq('id', id).single();
+    const { data: post, error } = await blogSupabase.from('posts').select('*').eq('id', id).single();
     if (error) throw error;
 
     document.getElementById('edit-post-id').value = post.id;
@@ -527,10 +634,10 @@ window.editPost = async function(id) {
 
 window.deletePost = async function(id) {
   if (!confirm("정말로 이 포스트를 삭제하시겠습니까? 관련 댓글도 함께 삭제되지 않을 수 있으니 주의하세요.")) return;
-  if (!supabase) return;
+  if (!blogSupabase) return;
 
   try {
-    const { error } = await supabase.from('posts').delete().eq('id', id);
+    const { error } = await blogSupabase.from('posts').delete().eq('id', id);
     if (error) throw error;
 
     alert("삭제되었습니다.");
@@ -604,7 +711,7 @@ function setupEditorFormSubmit() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!supabase) return;
+    if (!blogSupabase) return;
 
     const id = document.getElementById('edit-post-id').value;
     const title = document.getElementById('post-title-input').value.trim();
@@ -618,12 +725,12 @@ function setupEditorFormSubmit() {
     try {
       if (id) {
         // Update existing
-        const { error } = await supabase.from('posts').update(payload).eq('id', id);
+        const { error } = await blogSupabase.from('posts').update(payload).eq('id', id);
         if (error) throw error;
         alert("성공적으로 수정 및 업데이트되었습니다.");
       } else {
         // Create new
-        const { error } = await supabase.from('posts').insert([payload]);
+        const { error } = await blogSupabase.from('posts').insert([payload]);
         if (error) throw error;
         alert("새 포스트가 성공적으로 발행되었습니다.");
       }
@@ -652,14 +759,19 @@ function escapeHTML(str) {
 }
 
 // --- APPLICATION INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', () => {
+async function runInitialize() {
   initTheme();
-  const hasConfig = initSupabase();
+  await initSupabase(); // Wait for hybrid key fetching to finish
   initConfigModal();
   
-  if (hasConfig) {
-    handleIndexPage();
-    handleDetailPage();
-    handleAdminPage();
-  }
-});
+  // Always run handlers to manage default fallback UI states
+  handleIndexPage();
+  handleDetailPage();
+  handleAdminPage();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', runInitialize);
+} else {
+  runInitialize();
+}
